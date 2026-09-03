@@ -5,7 +5,11 @@ function getExcelJS() {
 }
 function buildAoa(model, collapseSet, options) {
   const visible = flatten(model.rowTree, collapseSet, {
-    subtotalPos: options.subtotalPos
+    subtotalPos: options.subtotalPos,
+    // Without this the export flattens under "columns" rules while the screen
+    // is in compact mode: group rows lose their inline subtotal and come out
+    // blank.
+    layout: options.rowLayout
   });
   const leaves = [];
   (function walk(nodes, stack) {
@@ -36,10 +40,9 @@ function buildAoa(model, collapseSet, options) {
     row[Math.min(vr.depth, dimCols - 1)] = vr.kind === "total" ? vr.node.text || "Total" : vr.node.text;
     for (const leaf of leaves) {
       let v = "";
-      if (vr.leafIndex !== null) {
-        const cell = model.cells[vr.leafIndex][leaf.node ? leaf.node.leafStart : 0];
-        v = cell ? cell.num !== null ? cell.num : cell.text : "";
-      }
+      const dataRow = vr.leafIndex === null ? null : model.cells[vr.leafIndex];
+      const cell = dataRow ? dataRow[leaf.node ? leaf.node.leafStart : 0] : null;
+      if (cell) v = cell.num !== null ? cell.num : cell.text;
       row.push(v);
     }
     aoa.push(row);

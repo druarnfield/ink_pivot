@@ -38,8 +38,14 @@ var initialProperties = {
     totalText: "",
     exportPrefix: "pivot"
   },
-  // Persisted UI state (soft-ish; written back by the adapter):
-  inkPivotState: { collapsedPaths: [], colWidths: {}, frOverrides: {} }
+  // Session UI state, written back by the adapter as a soft patch. `collapse`
+  // holds only the user's deltas against the initial expand level, not a full
+  // list of collapsed paths — see core/state/collapse.js.
+  inkPivotState: {
+    collapse: { collapsed: [], expanded: [], level: 99 },
+    colWidths: {},
+    frOverrides: {}
+  }
 };
 function colorItem(refKey, label) {
   return { type: "string", ref: "inkPivot." + refKey, label, expression: "optional" };
@@ -56,13 +62,20 @@ var definition = {
           items: {
             showTotal: {
               type: "boolean",
+              component: "switch",
               ref: "qShowTotal",
               label: "Subtotal data (needed for collapsed group values)",
-              defaultValue: true
+              // defaultValue only seeds the control, it never writes the
+              // property — the adapter soft-patches qShowTotal on for
+              // dimensions that have no explicit value.
+              defaultValue: true,
+              options: [{ value: true, label: "On" }, { value: false, label: "Off" }]
             },
             inkFr: {
               type: "number",
-              ref: "inkFr",
+              // Root-level custom def props never reach the layout; only
+              // unknown qDef.* members echo into qDimensionInfo/qMeasureInfo.
+              ref: "qDef.inkFr",
               label: "Width (fr, used when Fill width is on)",
               defaultValue: 1
             }
@@ -87,7 +100,9 @@ var definition = {
             },
             inkFr: {
               type: "number",
-              ref: "inkFr",
+              // Root-level custom def props never reach the layout; only
+              // unknown qDef.* members echo into qDimensionInfo/qMeasureInfo.
+              ref: "qDef.inkFr",
               label: "Width (fr, used when Fill width is on)",
               defaultValue: 1
             }

@@ -11,19 +11,24 @@ function flatten(nodes, collapseSet, opts) {
   const subtotalPos = opts && opts.subtotalPos || "bottom";
   const compact = !!(opts && opts.layout === "compact");
   const out = [];
-  function emit(nodeList) {
+  // `inGroup` is false only for the root node list. Compact mode folds a
+  // group's subtotal into the group row itself, so the engine's 'T' sibling
+  // is redundant there — but at the root there is no group row to carry the
+  // grand total, and dropping it lost the row entirely.
+  function emit(nodeList, inGroup) {
     const totals = [];
     const others = [];
     for (const nd of nodeList) {
       (nd.type === "T" ? totals : others).push(nd);
     }
-    const ordered = compact || subtotalPos === "off" ? others : subtotalPos === "top" ? totals.concat(others) : others.concat(totals);
+    const dropTotals = subtotalPos === "off" || compact && inGroup;
+    const ordered = dropTotals ? others : subtotalPos === "top" ? totals.concat(others) : others.concat(totals);
     for (const node of ordered) {
       if (node.type === "T") {
         out.push({ node, kind: "total", leafIndex: node.leafStart, depth: node.depth });
       } else if (node.children.length === 0) {
         out.push({ node, kind: "leaf", leafIndex: node.leafStart, depth: node.depth });
-      } else if (collapseSet.isCollapsed(node.path)) {
+      } else if (collapseSet.isCollapsed(node)) {
         out.push({ node, kind: "collapsed", leafIndex: groupValueIndex(node), depth: node.depth });
       } else {
         out.push({
@@ -32,23 +37,11 @@ function flatten(nodes, collapseSet, opts) {
           leafIndex: compact ? groupValueIndex(node) : null,
           depth: node.depth
         });
-        emit(node.children);
+        emit(node.children, true);
       }
     }
   }
-  emit(nodes);
+  emit(nodes, false);
   return out;
 }
-function pathsAtOrBelowLevel(nodes, level) {
-  const paths = [];
-  (function walk(list) {
-    for (const nd of list) {
-      if (nd.type !== "T" && nd.children.length) {
-        if (nd.depth >= level) paths.push(nd.path);
-        walk(nd.children);
-      }
-    }
-  })(nodes);
-  return paths;
-}
-module.exports = { flatten, pathsAtOrBelowLevel };
+module.exports = { flatten };

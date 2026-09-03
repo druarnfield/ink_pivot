@@ -2,7 +2,6 @@ module.exports = function() {
   const { initialProperties, definition } = require("./properties.js");
   const { fetchPivot, CAP_EXCEEDED, CANCELLED } = require("./core/data/fetch.js");
   const { CollapseSet } = require("./core/state/collapse.js");
-  const { pathsAtOrBelowLevel } = require("./core/state/flatten.js");
   const { createPivotGrid } = require("./core/render/grid.js");
   const { exportPivotXlsx } = require("./export/xlsx-export.js");
   function esc(s) {
@@ -29,26 +28,28 @@ module.exports = function() {
       // subtotalPos deliberately excluded: display-only, no refetch needed.
     ]);
   }
+  function persistedState(layout) {
+    const p = layout.inkPivot || {};
+    // Honour the switch on read as well as on write, so turning "remember"
+    // off actually starts from a clean slate instead of resurrecting state
+    // saved while it was on.
+    if (p.rememberCollapse === false) return {};
+    return layout.inkPivotState && typeof layout.inkPivotState === "object" ? layout.inkPivotState : {};
+  }
   function ensureInstance(self2, layout) {
     if (!self2._ink) {
+      const saved = persistedState(layout);
       self2._ink = {
         grid: null,
         model: null,
         hash: null,
         fetchGen: 0,
-        collapseSet: new CollapseSet(
-          layout.inkPivotState && layout.inkPivotState.collapsedPaths || []
-        ),
-        colWidths: Object.assign(
-          {},
-          layout.inkPivotState && layout.inkPivotState.colWidths || {}
-        ),
-        frOverrides: Object.assign(
-          {},
-          layout.inkPivotState && layout.inkPivotState.frOverrides || {}
-        ),
-        persistTimer: null,
-        initialised: false
+        // `collapse` is the current {collapsed, expanded, level} shape;
+        // `collapsedPaths` is the bare array written by earlier builds.
+        collapseSet: new CollapseSet(saved.collapse || saved.collapsedPaths || []),
+        colWidths: Object.assign({}, saved.colWidths || {}),
+        frOverrides: Object.assign({}, saved.frOverrides || {}),
+        persistTimer: null
       };
     }
     return self2._ink;
@@ -57,11 +58,14 @@ module.exports = function() {
     if (!(ink.layout && ink.layout.inkPivot || {}).rememberCollapse) return;
     clearTimeout(ink.persistTimer);
     ink.persistTimer = setTimeout(function() {
+      // 'add' rather than 'replace': objects created before inkPivotState
+      // existed have no such path, and the engine rejects a replace on a
+      // path that is not there. 'add' overwrites when it is.
       self2.backendApi.applyPatches([{
-        qOp: "replace",
+        qOp: "add",
         qPath: "/inkPivotState",
         qValue: JSON.stringify({
-          collapsedPaths: ink.collapseSet.serialize(),
+          collapse: ink.collapseSet.serialize(),
           colWidths: ink.colWidths,
           frOverrides: ink.frOverrides
         })
@@ -69,6 +73,55 @@ module.exports = function() {
         console.warn("[InkPivot] persist failed", e);
       });
     }, 800);
+  }
+  // Everything the engine needs before it will emit subtotal ('T') rows, kept
+  // as session soft patches so consumers of a published app get them too.
+  //
+  //  - qIndentMode: under qAlwaysFullyExpanded the engine emits NO 'T' rows in
+  //    default pivot mode, whatever qShowTotal says. Indent mode is what makes
+  //    them materialise. We render our own layout, so the indent presentation
+  //    never reaches the screen.
+  //  - qShowTotal: still the per-dimension subtotal switch. The property
+  //    panel's `defaultValue: true` is display-only — it never writes the
+  //    property — so a freshly added dimension falls back to the engine
+  //    default of false and produces no subtotals at all. Seed it only when
+  //    the key is absent, so a user who switched it off stays switched off.
+  //
+  // Re-runs when the dimension count changes, since dimensions are added long
+  // after the first paint.
+  function migrateHyperCubeDef(self2, ink, hc) {
+    const nDims = hc.qDimensionInfo.length;
+    if (ink.migratedFor === nDims) return;
+    ink.migratedFor = nDims;
+    const model = self2.backendApi.model;
+    Promise.resolve().then(function() {
+      return model.getEffectiveProperties ? model.getEffectiveProperties() : model.getProperties();
+    }).then(function(props) {
+      const def = props && props.qHyperCubeDef;
+      if (!def) return;
+      // 'add' rather than 'replace': legacy objects predate these keys, and
+      // the engine rejects a replace on a path that does not exist.
+      const patches = [];
+      if (!def.qIndentMode) {
+        patches.push({ qOp: "add", qPath: "/qHyperCubeDef/qIndentMode", qValue: "true" });
+      }
+      if (!def.qAlwaysFullyExpanded) {
+        patches.push({ qOp: "add", qPath: "/qHyperCubeDef/qAlwaysFullyExpanded", qValue: "true" });
+      }
+      (def.qDimensions || []).forEach(function(d, i) {
+        if (d && d.qShowTotal === void 0) {
+          patches.push({
+            qOp: "add",
+            qPath: "/qHyperCubeDef/qDimensions/" + i + "/qShowTotal",
+            qValue: "true"
+          });
+        }
+      });
+      if (patches.length) return model.applyPatches(patches, true);
+    }).catch(function(e) {
+      ink.migratedFor = -1;
+      console.warn("[InkPivot] hypercube migration skipped", e);
+    });
   }
   const LEGACY_AUTO = {
     headerBg: "#f8f9fa",
@@ -94,14 +147,17 @@ module.exports = function() {
     return {
       rowHeight: p.rowHeight || 28,
       subtotalPos: p.subtotalPos || "bottom",
-      indentPx: p.indentPx || 16,
-      nullText: p.nullText || "-",
+      indentPx: typeof p.indentPx === "number" ? p.indentPx : 16,
+      nullText: typeof p.nullText === "string" ? p.nullText : "-",
       colWidths: ink.colWidths,
       rowLayout: p.rowLayout || "columns",
       fillWidth: !!p.fillWidth,
       hierarchyFr: p.hierarchyFr || 1.5,
-      // Custom def props (inkFr) echo through into the layout info objects,
-      // same mechanism as the qShowTotal panel item.
+      // Unknown qDef.* members echo into qDimensionInfo/qMeasureInfo at the
+      // info root (the mechanism cId uses) — hence `d.inkFr`, not
+      // `d.qDef.inkFr`. Root-level custom def props do NOT surface, which is
+      // why the panel refs are 'qDef.inkFr'. qShowTotal is engine-defined and
+      // surfaces on its own; do not generalise from it.
       dimFrs: hc.qDimensionInfo.slice(0, nLeft).map(function(d) {
         return d.inkFr || 1;
       }),
@@ -126,8 +182,8 @@ module.exports = function() {
         collapseSet: ink.collapseSet,
         options,
         callbacks: {
-          onToggle: function(path) {
-            ink.collapseSet.toggle(path);
+          onToggle: function(node) {
+            ink.collapseSet.toggle(node);
             ink.grid.update({});
             persistState(self2, ink);
           },
@@ -144,6 +200,7 @@ module.exports = function() {
             const p = ink.layout && ink.layout.inkPivot || {};
             exportPivotXlsx(ink.model, ink.collapseSet, {
               subtotalPos: p.subtotalPos || "bottom",
+              rowLayout: p.rowLayout || "columns",
               exportPrefix: p.exportPrefix || "pivot",
               dimTitles: optionsFromLayout(ink.layout, ink).dimTitles,
               numFormats: ink.layout.qHyperCube.qMeasureInfo.map(function(m) {
@@ -213,27 +270,14 @@ module.exports = function() {
         return Promise.resolve();
       }
       const ink = ensureInstance(self2, layout);
-      if (!ink.indentChecked) {
-        ink.indentChecked = true;
-        const model = self2.backendApi.model;
-        Promise.resolve().then(function() {
-          return model.getEffectiveProperties ? model.getEffectiveProperties() : model.getProperties();
-        }).then(function(props) {
-          const def = props && props.qHyperCubeDef;
-          if (!def) return;
-          const patches = [];
-          if (!def.qIndentMode) {
-            patches.push({ qOp: "replace", qPath: "/qHyperCubeDef/qIndentMode", qValue: "true" });
-          }
-          if (!def.qAlwaysFullyExpanded) {
-            patches.push({ qOp: "replace", qPath: "/qHyperCubeDef/qAlwaysFullyExpanded", qValue: "true" });
-          }
-          if (patches.length) return model.applyPatches(patches, true);
-        }).catch(function(e) {
-          console.warn("[InkPivot] indent-mode migration skipped", e);
-        });
-      }
+      migrateHyperCubeDef(self2, ink, hc);
       ink.layout = layout;
+      // Re-derive the baseline on every paint so a change to "Initial expand
+      // level" in the property panel takes effect immediately, instead of
+      // only on the next fresh mount.
+      ink.collapseSet.setDefaultLevel(
+        layout.inkPivot && layout.inkPivot.initialExpandLevel
+      );
       const hash = dataHash(layout);
       if (hash === ink.hash && ink.model) {
         renderGrid(self2, $element, ink);
@@ -256,13 +300,6 @@ module.exports = function() {
         ink.model = model;
         model.dimInfoRows = hc.qNoOfLeftDims === -1 || hc.qNoOfLeftDims === void 0 ? hc.qDimensionInfo.length : hc.qNoOfLeftDims;
         ink.hash = hash;
-        if (!ink.initialised) {
-          ink.initialised = true;
-          const lvl = layout.inkPivot && layout.inkPivot.initialExpandLevel;
-          if (typeof lvl === "number" && lvl < 99 && ink.collapseSet.serialize().length === 0) {
-            ink.collapseSet.collapseAll(pathsAtOrBelowLevel(model.rowTree, lvl));
-          }
-        }
         ink.grid = null;
         renderGrid(self2, $element, ink);
       }).catch(function(err) {

@@ -223,7 +223,7 @@ function createPivotGrid(container, cfg) {
           ch.textContent = vr.kind === "collapsed" ? "\u25B8" : "\u25BE";
           ch.addEventListener("click", (e) => {
             e.stopPropagation();
-            state.callbacks.onToggle && state.callbacks.onToggle(vr.node.path);
+            state.callbacks.onToggle && state.callbacks.onToggle(vr.node);
           });
           pad.appendChild(ch);
         }
@@ -294,9 +294,15 @@ function createPivotGrid(container, cfg) {
   const OVERSCAN = 10;
   let rafPending = false;
   function renderWindow() {
+    if (!els.spacer) return;
     const rh = state.options.rowHeight;
     const viewH = scroller.clientHeight || 600;
-    const first = Math.max(0, Math.floor(scroller.scrollTop / rh) - OVERSCAN);
+    // Rows are absolute inside the spacer, which sits below the header in
+    // normal flow — scrollTop is in scroller coordinates, so the header's
+    // height has to come off before it maps to a row index. Overscan was
+    // hiding this while the header was one row tall; two column-dimension
+    // levels pushed the window off by more than the overscan.
+    const first = Math.max(0, Math.floor((scroller.scrollTop - els.spacer.offsetTop) / rh) - OVERSCAN);
     const count = Math.ceil(viewH / rh) + OVERSCAN * 2;
     const last = Math.min(state.visible.length, first + count);
     els.spacer.innerHTML = "";
