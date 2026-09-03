@@ -1,0 +1,136 @@
+/* Single source of truth for the default palette. The adapter only sets a
+   --ip-* variable inline when the user explicitly overrode it in the property
+   panel, so a Sense theme (or the future InkPivot theme layer) can restyle
+   everything below by targeting .ink-pivot. */
+.ink-pivot {
+  --ip-row-height: 28px;
+  --ip-font-size: 13px;
+  --ip-indent: 16px;
+  --ip-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ip-bg: #ffffff;
+  --ip-header-bg: #f8f9fa;
+  --ip-header-text: #374151;
+  --ip-cell-text: #374151;
+  --ip-dim-text: #111111;
+  --ip-dim-bg: #ffffff;
+  --ip-total-bg: #f5f5f5;
+  --ip-total-text: #111111;
+  --ip-band-bg: rgba(0, 0, 0, 0.02);
+  --ip-hairline: #e5e7eb;
+  --ip-muted: #6b7280;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--ip-font-family);
+  font-size: var(--ip-font-size);
+  background: var(--ip-bg);
+}
+.ink-pivot__scroller {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+.ink-pivot__spacer { position: relative; }
+.ink-pivot__row {
+  position: absolute;
+  left: 0;
+  display: flex;
+  height: var(--ip-row-height);
+  line-height: var(--ip-row-height);
+  width: max-content;
+  min-width: 100%;
+}
+.ink-pivot__row--band { background: var(--ip-band-bg); }
+.ink-pivot__row--total {
+  background: var(--ip-total-bg);
+  color: var(--ip-total-text);
+  font-weight: 600;
+}
+.ink-pivot__cell {
+  flex: 0 0 auto;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--ip-hairline);
+  border-right: 1px solid var(--ip-hairline);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+  color: var(--ip-cell-text);
+}
+.ink-pivot__cell--dim {
+  position: sticky;
+  z-index: 2;
+  background: var(--ip-dim-bg);
+  color: var(--ip-dim-text);
+  font-weight: 500;
+  cursor: pointer;
+}
+/* Sticky cells must stay opaque even when the row color has alpha, or the
+   data cells scrolling underneath show through. Layer the (possibly
+   translucent) row color over the opaque dim background. */
+.ink-pivot__row--total .ink-pivot__cell--dim {
+  background: linear-gradient(var(--ip-total-bg), var(--ip-total-bg)), var(--ip-dim-bg);
+}
+.ink-pivot__row--band .ink-pivot__cell--dim {
+  background: linear-gradient(var(--ip-band-bg), var(--ip-band-bg)), var(--ip-dim-bg);
+}
+.ink-pivot__cell--num { text-align: right; font-variant-numeric: tabular-nums; }
+.ink-pivot__chevron {
+  display: inline-block;
+  width: 14px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--ip-muted);
+}
+.ink-pivot__header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--ip-header-bg);
+  color: var(--ip-header-text);
+  font-weight: 600;
+  width: max-content;
+  min-width: 100%;
+}
+.ink-pivot__header .ink-pivot__row { position: relative; }
+.ink-pivot__header .ink-pivot__cell { background: var(--ip-header-bg); }
+.ink-pivot__header .ink-pivot__cell--dim {
+  z-index: 5;
+  background: var(--ip-header-bg);
+  color: var(--ip-header-text);
+}
+.ink-pivot__export {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 7;
+  border: 1px solid var(--ip-hairline);
+  background: var(--ip-bg);
+  color: var(--ip-cell-text);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+}
+.ink-pivot__resizer {
+  position: absolute;
+  right: -3px; top: 0;
+  width: 6px; height: 100%;
+  cursor: col-resize;
+  z-index: 6;
+}
+.ink-pivot__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ip-muted);
+  gap: 8px;
+  text-align: center;
+  padding: 16px;
+}
+.ink-pivot__state b { color: var(--ip-dim-text); }

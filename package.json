@@ -1,0 +1,17 @@
+{
+  "name": "ink-pivot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "zip": "node build.mjs && cd dist && zip -r ../ink-pivot.zip . -x '__MACOSX/*' '.DS_Store'"
+  },
+  "dependencies": {
+    "exceljs": "*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.0"
+  }
+}
