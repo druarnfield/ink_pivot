@@ -4,13 +4,14 @@ module.exports = function() {
   const { CollapseSet } = require("./core/state/collapse.js");
   const { createPivotGrid } = require("./core/render/grid.js");
   const { exportPivotXlsx } = require("./export/xlsx-export.js");
+  const { cls } = require("./core/ns.js");
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function(ch) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
     });
   }
   function stateEl(msg, sub) {
-    return '<div class="ink-pivot"><div class="ink-pivot__state"><b>' + esc(msg) + "</b>" + (sub ? "<span>" + esc(sub) + "</span>" : "") + "</div></div>";
+    return '<div class="' + cls() + '"><div class="' + cls("__state") + '"><b>' + esc(msg) + "</b>" + (sub ? "<span>" + esc(sub) + "</span>" : "") + "</div></div>";
   }
   function dataHash(layout) {
     const hc = layout.qHyperCube;
@@ -176,7 +177,7 @@ module.exports = function() {
     const scroll = ink.grid ? ink.grid.getScroll() : ink.lastScroll || null;
     ink.lastScroll = null;
     const options = optionsFromLayout(ink.layout, ink);
-    if (!ink.grid || !container.querySelector(".ink-pivot")) {
+    if (!ink.grid || !container.querySelector("." + cls())) {
       ink.grid = createPivotGrid(container, {
         model: ink.model,
         collapseSet: ink.collapseSet,
@@ -286,7 +287,7 @@ module.exports = function() {
       if (ink.grid) ink.lastScroll = ink.grid.getScroll();
       const gen = ++ink.fetchGen;
       $element.html(stateEl("Loading pivot\u2026", ""));
-      const sub = $element.find(".ink-pivot__state span");
+      const sub = $element.find("." + cls("__state") + " span");
       return fetchPivot(self2.backendApi.model, layout, {
         cellCap: layout.inkPivot && layout.inkPivot.cellCap || 25e4,
         isCancelled: function() {

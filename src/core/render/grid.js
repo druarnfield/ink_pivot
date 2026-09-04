@@ -1,12 +1,16 @@
 "use strict";
 var { flatten } = require("../state/flatten.js");
 var { resolveWidths, frForWidth, MIN_COL_PX } = require("./widths.js");
+var { NS, cls } = require("../ns.js");
 var gridCss = require("./grid.css");
 function injectCss(doc) {
-  if (doc.getElementById("ink-pivot-css")) return;
+  const id = NS + "-css";
+  if (doc.getElementById(id)) return;
   const s = doc.createElement("style");
-  s.id = "ink-pivot-css";
-  s.textContent = typeof gridCss === "string" ? gridCss : "";
+  s.id = id;
+  // Every class in grid.css starts with the same prefix, so rewriting the
+  // prefix namespaces the whole sheet.
+  s.textContent = typeof gridCss === "string" ? gridCss.split(".ink-pivot").join("." + NS) : "";
   doc.head.appendChild(s);
 }
 var COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\))$/i;
@@ -67,9 +71,9 @@ function createPivotGrid(container, cfg) {
     leaves: []
   };
   const root = doc.createElement("div");
-  root.className = "ink-pivot";
+  root.className = cls();
   const scroller = doc.createElement("div");
-  scroller.className = "ink-pivot__scroller";
+  scroller.className = cls("__scroller");
   root.appendChild(scroller);
   container.innerHTML = "";
   container.appendChild(root);
@@ -157,25 +161,25 @@ function createPivotGrid(container, cfg) {
   }
   function addResizer(cellEl, key) {
     const rz = doc.createElement("div");
-    rz.className = "ink-pivot__resizer";
+    rz.className = cls("__resizer");
     rz.addEventListener("mousedown", (e) => startResize(e, key, cellEl));
-    if (!cellEl.classList.contains("ink-pivot__cell--dim")) {
+    if (!cellEl.classList.contains(cls("__cell--dim"))) {
       cellEl.style.position = "relative";
     }
     cellEl.appendChild(rz);
   }
   function buildHeader() {
     const header = doc.createElement("div");
-    header.className = "ink-pivot__header";
+    header.className = cls("__header");
     const depth = Math.max(1, state.model.dimInfoCols);
     for (let lvl = 0; lvl < depth; lvl++) {
       const row = doc.createElement("div");
-      row.className = "ink-pivot__row";
+      row.className = cls("__row");
       const titles = state.options.dimTitles || [];
       let left = 0;
       for (let d = 0; d < state.computed.dim.length; d++) {
         const c = doc.createElement("div");
-        c.className = "ink-pivot__cell ink-pivot__cell--dim";
+        c.className = cls("__cell") + " " + cls("__cell--dim");
         c.style.width = dimWidth(d) + "px";
         c.style.left = left + "px";
         c.textContent = lvl === depth - 1 ? isCompact() ? titles.join(" / ") : titles[d] || "" : "";
@@ -185,7 +189,7 @@ function createPivotGrid(container, cfg) {
       }
       state.leaves.forEach((leaf, i) => {
         const c = doc.createElement("div");
-        c.className = "ink-pivot__cell";
+        c.className = cls("__cell");
         c.style.width = widthFor(i) + "px";
         const nodeAtLvl = leaf.stack[lvl];
         const prev = i > 0 ? state.leaves[i - 1].stack[lvl] : null;
@@ -204,13 +208,13 @@ function createPivotGrid(container, cfg) {
   }
   function buildRow(vr, idx) {
     const row = doc.createElement("div");
-    row.className = "ink-pivot__row" + (vr.kind === "total" ? " ink-pivot__row--total" : "") + (vr.band ? " ink-pivot__row--band" : "");
+    row.className = cls("__row") + (vr.kind === "total" ? " " + cls("__row--total") : "") + (vr.band ? " " + cls("__row--band") : "");
     row.style.top = idx * state.options.rowHeight + "px";
     const labelCol = isCompact() ? 0 : vr.depth;
     let left = 0;
     for (let d = 0; d < state.computed.dim.length; d++) {
       const c = doc.createElement("div");
-      c.className = "ink-pivot__cell ink-pivot__cell--dim";
+      c.className = cls("__cell") + " " + cls("__cell--dim");
       c.style.width = dimWidth(d) + "px";
       c.style.left = left + "px";
       left += dimWidth(d);
@@ -219,7 +223,7 @@ function createPivotGrid(container, cfg) {
         pad.style.paddingLeft = vr.depth * state.options.indentPx + "px";
         if (vr.kind === "group" || vr.kind === "collapsed") {
           const ch = doc.createElement("span");
-          ch.className = "ink-pivot__chevron";
+          ch.className = cls("__chevron");
           ch.textContent = vr.kind === "collapsed" ? "\u25B8" : "\u25BE";
           ch.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -245,7 +249,7 @@ function createPivotGrid(container, cfg) {
     }
     state.leaves.forEach((leaf, i) => {
       const c = doc.createElement("div");
-      c.className = "ink-pivot__cell ink-pivot__cell--num";
+      c.className = cls("__cell") + " " + cls("__cell--num");
       c.style.width = widthFor(i) + "px";
       const dataRow = vr.leafIndex === null ? null : state.model.cells[vr.leafIndex];
       const cell = dataRow ? dataRow[leaf.node ? leaf.node.leafStart : 0] : null;
@@ -279,14 +283,14 @@ function createPivotGrid(container, cfg) {
     scroller.appendChild(els.header);
     if (state.callbacks.onExport && !exportBtn) {
       exportBtn = doc.createElement("button");
-      exportBtn.className = "ink-pivot__export";
+      exportBtn.className = cls("__export");
       exportBtn.textContent = "\u2913";
       exportBtn.title = "Export to Excel";
       exportBtn.addEventListener("click", () => state.callbacks.onExport());
       root.appendChild(exportBtn);
     }
     els.spacer = doc.createElement("div");
-    els.spacer.className = "ink-pivot__spacer";
+    els.spacer.className = cls("__spacer");
     els.spacer.style.height = state.visible.length * state.options.rowHeight + "px";
     scroller.appendChild(els.spacer);
     renderWindow();

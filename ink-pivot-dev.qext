@@ -1,0 +1,9 @@
+{
+  "name": "InkPivot-Dev",
+  "description": "Client-rendered pivot with collapse, resize and xlsx export — development build, installs alongside InkPivot",
+  "type": "visualization",
+  "version": "0.1.2",
+  "author": "",
+  "icon": "table",
+  "preview": ""
+}
