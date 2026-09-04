@@ -1,0 +1,9 @@
+{
+  "name": "InkPivot",
+  "description": "Client-rendered pivot with collapse, resize and xlsx export",
+  "type": "visualization",
+  "version": "0.2.0",
+  "author": "",
+  "icon": "table",
+  "preview": ""
+}

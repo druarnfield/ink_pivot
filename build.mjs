@@ -3,15 +3,18 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 
-// The extension's identity in Sense. The .qext basename, the JS basename and
-// the folder QMC creates all have to agree — Sense loads <folder>/<id>.js next
-// to <id>.qext — and it is what lets this build sit alongside the published
-// InkPivot instead of replacing it. It is also injected into the bundle as the
-// CSS/class namespace (see src/core/ns.js).
-const EXT_ID = "ink-pivot-dev";
-
 const args = process.argv.slice(2);
 const watch = args.includes("--watch");
+
+// The extension's identity in Sense. The .qext basename, the JS basename and
+// the folder QMC creates all have to agree — Sense loads <folder>/<id>.js next
+// to <id>.qext. It is also injected into the bundle as the CSS/class namespace
+// (see src/core/ns.js), so --dev produces a build that installs and renders
+// alongside the released one instead of replacing it: different id, different
+// stylesheet selectors, separate localStorage.
+const DEV = args.includes("--dev");
+const BASE_ID = "ink-pivot";
+const EXT_ID = DEV ? BASE_ID + "-dev" : BASE_ID;
 // QMC and the proxy both cache extensions hard, so every importable build gets
 // a version nobody has seen. Watch rebuilds are not imports, and --no-bump is
 // there for reproducing a specific build.
@@ -34,11 +37,17 @@ const version = pkg.version;
 
 // package.json is the single source of truth; the .qext follows it so the two
 // can never disagree about what QMC is showing.
-const qextPath = `${EXT_ID}.qext`;
+const qextPath = `${BASE_ID}.qext`;
 const qext = JSON.parse(fs.readFileSync(qextPath, "utf8"));
 if (qext.version !== version) {
   qext.version = version;
   fs.writeFileSync(qextPath, JSON.stringify(qext, null, 2) + "\n");
+}
+// One .qext in the repo; the dev variant is derived so the two can never
+// drift apart on anything but the name.
+if (DEV) {
+  qext.name = qext.name + "-Dev";
+  qext.description = qext.description + " \u2014 development build";
 }
 
 /* -------------------------------------------------------------------- bundle */

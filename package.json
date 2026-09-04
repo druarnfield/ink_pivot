@@ -1,10 +1,11 @@
 {
   "name": "ink-pivot",
-  "version": "0.1.7",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "test": "node --test \"test/*.test.js\"",
     "build": "node build.mjs",
+    "build:dev": "node build.mjs --dev",
     "watch": "node build.mjs --watch"
   },
   "dependencies": {
