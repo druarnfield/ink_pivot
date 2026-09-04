@@ -5,6 +5,8 @@ module.exports = function() {
   const { createPivotGrid } = require("./core/render/grid.js");
   const { exportPivotXlsx } = require("./export/xlsx-export.js");
   const { cls } = require("./core/ns.js");
+  const { safeColor, fromPicker } = require("./core/render/color.js");
+  const uiStore = require("./core/state/store.js");
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function(ch) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
@@ -29,12 +31,24 @@ module.exports = function() {
       // subtotalPos deliberately excluded: display-only, no refetch needed.
     ]);
   }
+  function objectIdOf(layout) {
+    return layout.qInfo && layout.qInfo.qId || null;
+  }
   function persistedState(layout) {
     const p = layout.inkPivot || {};
+    const id = objectIdOf(layout);
     // Honour the switch on read as well as on write, so turning "remember"
-    // off actually starts from a clean slate instead of resurrecting state
-    // saved while it was on.
-    if (p.rememberCollapse === false) return {};
+    // off starts from a clean slate instead of resurrecting saved state —
+    // and drop the stored copy, or it would come back if the switch does.
+    if (p.rememberCollapse === false) {
+      uiStore.clear(id);
+      return {};
+    }
+    // localStorage is the durable copy and wins. The soft-patched layout
+    // value is the fallback for a browser that blocks storage, where state
+    // still needs to survive within the session.
+    const stored = uiStore.load(id);
+    if (stored) return stored;
     return layout.inkPivotState && typeof layout.inkPivotState === "object" ? layout.inkPivotState : {};
   }
   function ensureInstance(self2, layout) {
@@ -59,19 +73,23 @@ module.exports = function() {
     if (!(ink.layout && ink.layout.inkPivot || {}).rememberCollapse) return;
     clearTimeout(ink.persistTimer);
     ink.persistTimer = setTimeout(function() {
-      // 'add' rather than 'replace': objects created before inkPivotState
-      // existed have no such path, and the engine rejects a replace on a
-      // path that is not there. 'add' overwrites when it is.
+      const state = {
+        collapse: ink.collapseSet.serialize(),
+        colWidths: ink.colWidths,
+        frOverrides: ink.frOverrides
+      };
+      // Durable, per browser profile.
+      uiStore.save(objectIdOf(ink.layout || {}), state);
+      // Session copy. Keeps state alive where storage is blocked, and keeps
+      // it visible in the object's layout for debugging. 'add' rather than
+      // 'replace': objects created before inkPivotState existed have no such
+      // path, and the engine rejects a replace on a path that is not there.
       self2.backendApi.applyPatches([{
         qOp: "add",
         qPath: "/inkPivotState",
-        qValue: JSON.stringify({
-          collapse: ink.collapseSet.serialize(),
-          colWidths: ink.colWidths,
-          frOverrides: ink.frOverrides
-        })
+        qValue: JSON.stringify(state)
       }], true).catch(function(e) {
-        console.warn("[InkPivot] persist failed", e);
+        console.warn("[InkPivot] session persist failed", e);
       });
     }, 800);
   }
@@ -141,25 +159,36 @@ module.exports = function() {
     if (mode === "level") return lvl;
     return 99;
   }
+  const STYLE_VAR_FOR = {
+    headerBg: "header-bg",
+    headerText: "header-text",
+    totalBg: "total-bg",
+    totalText: "total-text"
+  };
   const LEGACY_AUTO = {
     headerBg: "#f8f9fa",
     headerText: "#374151",
     totalBg: "#f5f5f5",
     totalText: "#111111"
   };
+  // Colour pickers write { index, color } under inkPivot.colors. Objects
+  // saved before the pickers existed hold a bare string at inkPivot.<key>,
+  // where the old baked-in defaults meant "auto" rather than a user choice.
   function userColor(p, key) {
-    const v = p[key];
-    return v && v !== LEGACY_AUTO[key] ? v : null;
+    const picked = fromPicker(p.colors && p.colors[key]);
+    if (picked) return picked;
+    const legacy = p[key];
+    return legacy && legacy !== LEGACY_AUTO[key] ? safeColor(legacy) : null;
   }
   function optionsFromLayout(layout, ink) {
     const p = layout.inkPivot || {};
     const hc = layout.qHyperCube;
     const styles = {};
     if (p.fontSize && p.fontSize !== 13) styles["--ip-font-size"] = p.fontSize + "px";
-    if (userColor(p, "headerBg")) styles["--ip-header-bg"] = p.headerBg;
-    if (userColor(p, "headerText")) styles["--ip-header-text"] = p.headerText;
-    if (userColor(p, "totalBg")) styles["--ip-total-bg"] = p.totalBg;
-    if (userColor(p, "totalText")) styles["--ip-total-text"] = p.totalText;
+    ["headerBg", "headerText", "totalBg", "totalText"].forEach(function(key) {
+      const c = userColor(p, key);
+      if (c) styles["--ip-" + STYLE_VAR_FOR[key]] = c;
+    });
     if (p.banding === false) styles["--ip-band-bg"] = "transparent";
     const nLeft = hc.qNoOfLeftDims === -1 || hc.qNoOfLeftDims === void 0 ? hc.qDimensionInfo.length : hc.qNoOfLeftDims;
     return {

@@ -2,6 +2,7 @@
 var { flatten } = require("../state/flatten.js");
 var { resolveWidths, frForWidth, MIN_COL_PX } = require("./widths.js");
 var { NS, cls } = require("../ns.js");
+var { safeColor } = require("./color.js");
 var gridCss = require("./grid.css");
 function injectCss(doc) {
   const id = NS + "-css";
@@ -13,7 +14,6 @@ function injectCss(doc) {
   s.textContent = typeof gridCss === "string" ? gridCss.split(".ink-pivot").join("." + NS) : "";
   doc.head.appendChild(s);
 }
-var COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\))$/i;
 var STYLE_VARS = [
   "--ip-font-size",
   "--ip-header-bg",
@@ -255,10 +255,10 @@ function createPivotGrid(container, cfg) {
       const cell = dataRow ? dataRow[leaf.node ? leaf.node.leafStart : 0] : null;
       c.textContent = cellText(cell);
       if (cell && cell.attrs) {
-        const bg = cell.attrs[0] && cell.attrs[0].qText;
-        const fg = cell.attrs[1] && cell.attrs[1].qText;
-        if (bg && COLOR_RE.test(bg.trim())) c.style.backgroundColor = bg.trim();
-        if (fg && COLOR_RE.test(fg.trim())) c.style.color = fg.trim();
+        const bg = safeColor(cell.attrs[0] && cell.attrs[0].qText);
+        const fg = safeColor(cell.attrs[1] && cell.attrs[1].qText);
+        if (bg) c.style.backgroundColor = bg;
+        if (fg) c.style.color = fg;
       }
       row.appendChild(c);
     });

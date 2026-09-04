@@ -30,13 +30,16 @@ var initialProperties = {
     initialExpandLevel: 1,
     cellCap: 25e4,
     rememberCollapse: true,
-    // Colors default to '' = auto: the palette lives in grid.css so themes
-    // can restyle it. The adapter only writes an inline --ip-* variable for
-    // values the user actually sets (see optionsFromLayout / LEGACY_AUTO).
-    headerBg: "",
-    headerText: "",
-    totalBg: "",
-    totalText: "",
+    // Colours are picker objects { index, color } with color null = auto.
+    // The palette lives in grid.css so a Sense theme can restyle it, and the
+    // adapter writes an inline --ip-* variable only for a colour the user
+    // actually picked (see optionsFromLayout / userColor).
+    colors: {
+      headerBg: { index: -1, color: null },
+      headerText: { index: -1, color: null },
+      totalBg: { index: -1, color: null },
+      totalText: { index: -1, color: null }
+    },
     exportPrefix: "pivot"
   },
   // Session UI state, written back by the adapter as a soft patch. `collapse`
@@ -49,7 +52,15 @@ var initialProperties = {
   }
 };
 function colorItem(refKey, label) {
-  return { type: "string", ref: "inkPivot." + refKey, label, expression: "optional" };
+  return {
+    type: "object",
+    component: "color-picker",
+    ref: "inkPivot.colors." + refKey,
+    label,
+    // color null = no override, so the grid.css default (and therefore any
+    // Sense theme) keeps control.
+    defaultValue: { index: -1, color: null }
+  };
 }
 var definition = {
   type: "items",
@@ -161,7 +172,9 @@ var definition = {
           type: "boolean",
           component: "switch",
           ref: "inkPivot.rememberCollapse",
-          label: "Remember collapse state",
+          // Names both halves of what it stores, and where: this is a
+          // per-browser memory, not something the app carries for everyone.
+          label: "Remember collapse and column widths (this browser)",
           defaultValue: true,
           options: [{ value: true, label: "On" }, { value: false, label: "Off" }]
         }
