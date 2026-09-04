@@ -124,6 +124,23 @@ module.exports = function() {
       console.warn("[InkPivot] hypercube migration skipped", e);
     });
   }
+  // "Expand level" alone was a poor control: it counts levels of hierarchy, so
+  // in a two-dimension pivot the only value that collapses anything is 0 —
+  // level 1 leaves every depth-1 node a childless leaf and nothing to collapse.
+  // The mode says what you want in words; the number is only consulted, and
+  // only shown in the panel, when you ask for a specific level.
+  //
+  // Objects saved before the mode existed carry the number alone, so derive
+  // the mode from it rather than patching them.
+  function expandLevelFrom(p) {
+    const lvl = typeof p.initialExpandLevel === "number" && isFinite(p.initialExpandLevel)
+      ? p.initialExpandLevel
+      : 99;
+    const mode = p.initialExpandMode || (lvl >= 99 ? "all" : lvl <= 0 ? "collapsed" : "level");
+    if (mode === "collapsed") return 0;
+    if (mode === "level") return lvl;
+    return 99;
+  }
   const LEGACY_AUTO = {
     headerBg: "#f8f9fa",
     headerText: "#374151",
@@ -276,9 +293,7 @@ module.exports = function() {
       // Re-derive the baseline on every paint so a change to "Initial expand
       // level" in the property panel takes effect immediately, instead of
       // only on the next fresh mount.
-      ink.collapseSet.setDefaultLevel(
-        layout.inkPivot && layout.inkPivot.initialExpandLevel
-      );
+      ink.collapseSet.setDefaultLevel(expandLevelFrom(layout.inkPivot || {}));
       const hash = dataHash(layout);
       if (hash === ink.hash && ink.model) {
         renderGrid(self2, $element, ink);

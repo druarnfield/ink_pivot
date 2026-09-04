@@ -26,7 +26,8 @@ var initialProperties = {
     fontSize: 13,
     indentPx: 16,
     banding: true,
-    initialExpandLevel: 99,
+    initialExpandMode: "all",
+    initialExpandLevel: 1,
     cellCap: 25e4,
     rememberCollapse: true,
     // Colors default to '' = auto: the palette lives in grid.css so themes
@@ -128,7 +129,27 @@ var definition = {
           ]
         },
         nullText: { type: "string", ref: "inkPivot.nullText", label: "Null display text", defaultValue: "-" },
-        initialExpandLevel: { type: "number", ref: "inkPivot.initialExpandLevel", label: "Initial expand level (99 = all)", defaultValue: 99 },
+        initialExpandMode: {
+          type: "string",
+          component: "dropdown",
+          ref: "inkPivot.initialExpandMode",
+          label: "Rows start",
+          defaultValue: "all",
+          options: [
+            { value: "all", label: "Expanded" },
+            { value: "collapsed", label: "Collapsed" },
+            { value: "level", label: "Expanded to a level\u2026" }
+          ]
+        },
+        initialExpandLevel: {
+          type: "number",
+          ref: "inkPivot.initialExpandLevel",
+          label: "Levels expanded (1 = top level only)",
+          defaultValue: 1,
+          show: function(data) {
+            return (data.inkPivot || {}).initialExpandMode === "level";
+          }
+        },
         cellCap: { type: "number", ref: "inkPivot.cellCap", label: "Cell cap", defaultValue: 25e4 },
         noOfLeftDims: {
           type: "number",

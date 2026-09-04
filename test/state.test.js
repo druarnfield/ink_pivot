@@ -5,10 +5,10 @@ const test = require("node:test");
 const { parsePivotPages } = require("../src/core/data/parse.js");
 const { flatten } = require("../src/core/state/flatten.js");
 const { CollapseSet } = require("../src/core/state/collapse.js");
-const { twoDimPage } = require("./fixtures.js");
+const { twoDimPage, nullValuePage, grandTotalPage } = require("./fixtures.js");
 
 const model = () => parsePivotPages([twoDimPage(false)]);
-const shape = (rows) => rows.map((r) => r.node.text + ":" + r.kind);
+const shape = (rows) => rows.map((r) => (r.node.text || r.node.type) + ":" + r.kind);
 const find = (nodes, text) => {
   for (const nd of nodes) {
     if (nd.text === text) return nd;
@@ -18,14 +18,34 @@ const find = (nodes, text) => {
   return null;
 };
 
-test("parse: a 'T' subtree spans exactly one data row", () => {
+test("parse: a deepest-level 'T' is itself the subtotal row", () => {
   const m = model();
-  assert.equal(m.rowLeafCount, 6);
+  assert.equal(m.rowLeafCount, 5);
+  const total = find(m.rowTree, "A").children[2];
+  assert.equal(total.type, "T");
+  assert.equal(total.children.length, 0);
+  assert.equal(total.leafStart, 2, "A's subtotal row");
+  assert.equal(total.text, "", "the engine sends no qText on a 'T' node");
+});
+
+test("parse: a 'T' with an 'E' padding child still spans one data row", () => {
+  const m = parsePivotPages([grandTotalPage()]);
   const grand = m.rowTree[m.rowTree.length - 1];
   assert.equal(grand.type, "T");
-  assert.equal(grand.leafCount, 1, "grand total wraps a single 'E' padding leaf");
-  assert.equal(grand.leafStart, 5);
-  assert.equal(find(m.rowTree, "A").children[2].leafStart, 2, "A's subtotal row");
+  assert.equal(grand.leafCount, 1);
+  assert.equal(grand.leafStart, 2);
+  const rows = flatten(m.rowTree, new CollapseSet({ level: 99 }), {});
+  assert.deepEqual(shape(rows), ["A:group", "a1:leaf", "T:total", "T:total"]);
+  assert.equal(rows[3].leafIndex, 2, "the grand total reads its 'E' leaf's row");
+});
+
+test("parse: null dimension values and NaN measures survive", () => {
+  const m = parsePivotPages([nullValuePage()]);
+  const nullNode = find(m.rowTree, "A").children[1];
+  assert.equal(nullNode.type, "U");
+  assert.equal(nullNode.elemNo, -2);
+  assert.equal(m.cells[1][0].num, null, "qNum \"NaN\" is not a number");
+  assert.equal(m.cells[1][0].text, "");
 });
 
 test("flatten: subtotals render, and honour subtotalPos", () => {
@@ -33,14 +53,12 @@ test("flatten: subtotals render, and honour subtotalPos", () => {
   const all = new CollapseSet({ level: 99 });
 
   assert.deepEqual(shape(flatten(m.rowTree, all, { subtotalPos: "bottom" })), [
-    "A:group", "a1:leaf", "a2:leaf", "Totals:total",
-    "B:group", "b1:leaf", "Totals:total",
-    "Totals:total"
+    "A:group", "a1:leaf", "a2:leaf", "T:total",
+    "B:group", "b1:leaf", "T:total"
   ]);
   assert.deepEqual(shape(flatten(m.rowTree, all, { subtotalPos: "top" })), [
-    "Totals:total",
-    "A:group", "Totals:total", "a1:leaf", "a2:leaf",
-    "B:group", "Totals:total", "b1:leaf"
+    "A:group", "T:total", "a1:leaf", "a2:leaf",
+    "B:group", "T:total", "b1:leaf"
   ]);
   assert.equal(
     flatten(m.rowTree, all, { subtotalPos: "off" }).filter((r) => r.kind === "total").length,
@@ -52,7 +70,7 @@ test("flatten: total rows point at the engine's subtotal data row", () => {
   const m = model();
   const rows = flatten(m.rowTree, new CollapseSet({ level: 99 }), {});
   const totals = rows.filter((r) => r.kind === "total");
-  assert.deepEqual(totals.map((r) => r.leafIndex), [2, 4, 5]);
+  assert.deepEqual(totals.map((r) => r.leafIndex), [2, 4]);
 });
 
 test("flatten: a collapsed group shows its subtotal row's values", () => {
@@ -71,9 +89,8 @@ test("compact honours Subtotals rather than dropping every total row", () => {
   // Same rows as columns mode — only the label column differs, and that is
   // the renderer's business, not flatten's.
   assert.deepEqual(shape(flatten(m.rowTree, all, { layout: "compact", subtotalPos: "bottom" })), [
-    "A:group", "a1:leaf", "a2:leaf", "Totals:total",
-    "B:group", "b1:leaf", "Totals:total",
-    "Totals:total"
+    "A:group", "a1:leaf", "a2:leaf", "T:total",
+    "B:group", "b1:leaf", "T:total"
   ]);
   assert.deepEqual(
     flatten(m.rowTree, all, { layout: "compact", subtotalPos: "bottom" })
@@ -177,9 +194,8 @@ test("export: the sheet matches what is on screen, including compact layout", ()
   const columns = buildAoa(m, set, opts);
   assert.deepEqual(columns.aoa[0], ["Region", "City", ""]);
   assert.deepEqual(columns.aoa.slice(1).map((r) => r.slice(0, 2)), [
-    ["A", ""], ["", "a1"], ["", "a2"], ["", "Totals"],
-    ["B", ""], ["", "b1"], ["", "Totals"],
-    ["Totals", ""]
+    ["A", ""], ["", "a1"], ["", "a2"], ["", "Total"],
+    ["B", ""], ["", "b1"], ["", "Total"]
   ]);
   assert.equal(columns.aoa[1][2], "", "an expanded group row has no value of its own");
   assert.equal(columns.aoa[4][2], 20, "Total(A) carries leaf row 2");
@@ -187,7 +203,7 @@ test("export: the sheet matches what is on screen, including compact layout", ()
   // Compact exports the same rows as the screen shows it, which since compact
   // started honouring Subtotals means the same rows as columns mode.
   const compact = buildAoa(m, set, Object.assign({}, opts, { rowLayout: "compact" }));
-  assert.equal(compact.visible.length, 8);
+  assert.equal(compact.visible.length, 7);
   assert.deepEqual(compact.aoa.length, columns.aoa.length);
 
   const folded = buildAoa(m, set, Object.assign({}, opts, { rowLayout: "compact", subtotalPos: "off" }));
