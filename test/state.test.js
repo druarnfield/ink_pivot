@@ -64,17 +64,42 @@ test("flatten: a collapsed group shows its subtotal row's values", () => {
   assert.equal(rows.filter((r) => r.kind === "leaf").length, 0);
 });
 
-test("compact keeps the grand total but folds group subtotals into the group row", () => {
+test("compact honours Subtotals rather than dropping every total row", () => {
+  const m = model();
+  const all = new CollapseSet({ level: 99 });
+
+  // Same rows as columns mode — only the label column differs, and that is
+  // the renderer's business, not flatten's.
+  assert.deepEqual(shape(flatten(m.rowTree, all, { layout: "compact", subtotalPos: "bottom" })), [
+    "A:group", "a1:leaf", "a2:leaf", "Totals:total",
+    "B:group", "b1:leaf", "Totals:total",
+    "Totals:total"
+  ]);
+  assert.deepEqual(
+    flatten(m.rowTree, all, { layout: "compact", subtotalPos: "bottom" })
+      .filter((r) => r.kind === "group")
+      .map((r) => r.leafIndex),
+    [null, null],
+    "the total row carries the numbers, so the group row does not repeat them"
+  );
+});
+
+test("compact + Subtotals off folds the subtotal into the group row", () => {
   const m = model();
   const rows = flatten(m.rowTree, new CollapseSet({ level: 99 }), {
-    layout: "compact"
+    layout: "compact",
+    subtotalPos: "off"
   });
   assert.deepEqual(shape(rows), [
     "A:group", "a1:leaf", "a2:leaf",
-    "B:group", "b1:leaf",
-    "Totals:total"
+    "B:group", "b1:leaf"
   ]);
   assert.equal(rows[0].leafIndex, 2, "group row carries Total(A)'s values inline");
+  assert.equal(
+    flatten(m.rowTree, new CollapseSet({ level: 99 }), { subtotalPos: "off" })[0].leafIndex,
+    null,
+    "columns mode has its own dimension columns, so it does not fold"
+  );
 });
 
 test("the default level applies to groups that only appear after a selection", () => {
@@ -159,7 +184,13 @@ test("export: the sheet matches what is on screen, including compact layout", ()
   assert.equal(columns.aoa[1][2], "", "an expanded group row has no value of its own");
   assert.equal(columns.aoa[4][2], 20, "Total(A) carries leaf row 2");
 
-  const compact = buildAoa(m, set, Object.assign({ rowLayout: "compact" }, opts));
-  assert.equal(compact.visible.length, 6);
-  assert.equal(compact.aoa[1][2], 20, "compact group rows export their inline subtotal");
+  // Compact exports the same rows as the screen shows it, which since compact
+  // started honouring Subtotals means the same rows as columns mode.
+  const compact = buildAoa(m, set, Object.assign({}, opts, { rowLayout: "compact" }));
+  assert.equal(compact.visible.length, 8);
+  assert.deepEqual(compact.aoa.length, columns.aoa.length);
+
+  const folded = buildAoa(m, set, Object.assign({}, opts, { rowLayout: "compact", subtotalPos: "off" }));
+  assert.equal(folded.visible.length, 5);
+  assert.equal(folded.aoa[1][2], 20, "with Subtotals off the group row carries the subtotal");
 });

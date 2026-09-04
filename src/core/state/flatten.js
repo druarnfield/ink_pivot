@@ -11,18 +11,20 @@ function flatten(nodes, collapseSet, opts) {
   const subtotalPos = opts && opts.subtotalPos || "bottom";
   const compact = !!(opts && opts.layout === "compact");
   const out = [];
-  // `inGroup` is false only for the root node list. Compact mode folds a
-  // group's subtotal into the group row itself, so the engine's 'T' sibling
-  // is redundant there — but at the root there is no group row to carry the
-  // grand total, and dropping it lost the row entirely.
-  function emit(nodeList, inGroup) {
+  // Compact used to drop every 'T' row unconditionally and fold each group's
+  // subtotal into the group row instead. That left the Subtotals control dead
+  // in compact mode — no setting produced a total row — which reads as
+  // "totals don't work at all". Compact now honours Subtotals exactly like
+  // columns mode, and keeps the fold for the one case where it earns its
+  // place: Subtotals off, where the numbers would otherwise be lost.
+  const foldInline = compact && subtotalPos === "off";
+  function emit(nodeList) {
     const totals = [];
     const others = [];
     for (const nd of nodeList) {
       (nd.type === "T" ? totals : others).push(nd);
     }
-    const dropTotals = subtotalPos === "off" || compact && inGroup;
-    const ordered = dropTotals ? others : subtotalPos === "top" ? totals.concat(others) : others.concat(totals);
+    const ordered = subtotalPos === "off" ? others : subtotalPos === "top" ? totals.concat(others) : others.concat(totals);
     for (const node of ordered) {
       if (node.type === "T") {
         out.push({ node, kind: "total", leafIndex: node.leafStart, depth: node.depth });
@@ -34,14 +36,14 @@ function flatten(nodes, collapseSet, opts) {
         out.push({
           node,
           kind: "group",
-          leafIndex: compact ? groupValueIndex(node) : null,
+          leafIndex: foldInline ? groupValueIndex(node) : null,
           depth: node.depth
         });
-        emit(node.children, true);
+        emit(node.children);
       }
     }
   }
-  emit(nodes, false);
+  emit(nodes);
   return out;
 }
 module.exports = { flatten };
