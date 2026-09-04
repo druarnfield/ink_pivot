@@ -1,6 +1,6 @@
 {
   "name": "ink-pivot",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "scripts": {
     "test": "node --test \"test/*.test.js\"",

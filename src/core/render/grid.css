@@ -45,9 +45,13 @@
 .ink-pivot__row--band { background: var(--ip-band-bg); }
 .ink-pivot__row--total {
   background: var(--ip-total-bg);
-  color: var(--ip-total-text);
   font-weight: 600;
 }
+/* Text colour has to land on the cell, not the row. Every cell declares its
+   own `color` below, and a declaration always beats an inherited value however
+   specific the ancestor rule is — so setting it on the row alone left both
+   --ip-total-text and --ip-header-text with no effect on measure cells. */
+.ink-pivot__row--total .ink-pivot__cell { color: var(--ip-total-text); }
 .ink-pivot__cell {
   flex: 0 0 auto;
   padding: 0 8px;
@@ -95,12 +99,13 @@
   min-width: 100%;
 }
 .ink-pivot__header .ink-pivot__row { position: relative; }
-.ink-pivot__header .ink-pivot__cell { background: var(--ip-header-bg); }
-.ink-pivot__header .ink-pivot__cell--dim {
-  z-index: 5;
+.ink-pivot__header .ink-pivot__cell {
   background: var(--ip-header-bg);
   color: var(--ip-header-text);
 }
+/* Only the stacking order is left to say: the rule above already covers both
+   colours for dimension and measure header cells alike. */
+.ink-pivot__header .ink-pivot__cell--dim { z-index: 5; }
 .ink-pivot__export {
   position: absolute;
   top: 4px;
