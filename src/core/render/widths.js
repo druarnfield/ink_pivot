@@ -9,7 +9,14 @@ function resolveWidths(naturalPx, frs, containerW) {
     return naturalPx.slice();
   }
   const sum = frs.reduce((a, f) => a + normFr(f), 0);
-  return frs.map((f) => Math.max(MIN_COL_PX, normFr(f) / sum * containerW));
+  const out = frs.map((f) => Math.max(MIN_COL_PX, Math.floor(normFr(f) / sum * containerW)));
+  // Fractional shares round down, so the columns would sit a pixel or two
+  // short of the container. Give the remainder to the last column — but only
+  // when nothing was clamped up to the minimum, since then the row is already
+  // wider than the container and adding more would widen the overflow.
+  const used = out.reduce((a, b) => a + b, 0);
+  if (used < containerW && out.length) out[out.length - 1] += containerW - used;
+  return out;
 }
 function frForWidth(px, frRest, containerW) {
   const clamped = Math.min(

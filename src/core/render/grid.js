@@ -43,6 +43,24 @@ var DEFAULTS = {
   // session drag overrides under fill (key -> fr)
   styles: {}
 };
+var SVG_NS = "http://www.w3.org/2000/svg";
+function downloadIcon(doc) {
+  const svg = doc.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  const path = doc.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", "M8 2v7.2M4.9 6.1 8 9.2l3.1-3.1M2.8 11.6v1.9h10.4v-1.9");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.6");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(path);
+  return svg;
+}
 function colLeaves(model) {
   const leaves = [];
   (function walk(nodes, stack) {
@@ -277,22 +295,38 @@ function createPivotGrid(container, cfg) {
       vr.band = vr.kind === "leaf" && leafN++ % 2 === 1;
     }
     state.leaves = colLeaves(state.model);
-    computeWidths();
+
+    const rh = state.options.rowHeight;
+    const headerRows = Math.max(1, state.model.dimInfoCols);
     scroller.innerHTML = "";
+    els.spacer = doc.createElement("div");
+    els.spacer.className = cls("__spacer");
+    // Stand the full content height up BEFORE measuring, header included.
+    // computeWidths reads scroller.clientWidth, and that depends on whether a
+    // vertical scrollbar is showing — which depends on the row count we have
+    // just changed. Measuring first meant expanding a group sized the columns
+    // for a scrollbar that was about to appear, so under Fill width they
+    // overflowed into a horizontal scrollbar; collapsing left them short of
+    // the container instead.
+    els.spacer.style.height = (state.visible.length + headerRows) * rh + "px";
+    scroller.appendChild(els.spacer);
+
+    computeWidths();
+
     els.header = buildHeader();
-    scroller.appendChild(els.header);
+    scroller.insertBefore(els.header, els.spacer);
+    els.spacer.style.height = state.visible.length * rh + "px";
+
     if (state.callbacks.onExport && !exportBtn) {
       exportBtn = doc.createElement("button");
+      exportBtn.type = "button";
       exportBtn.className = cls("__export");
-      exportBtn.textContent = "\u2913";
       exportBtn.title = "Export to Excel";
+      exportBtn.setAttribute("aria-label", "Export to Excel");
+      exportBtn.appendChild(downloadIcon(doc));
       exportBtn.addEventListener("click", () => state.callbacks.onExport());
       root.appendChild(exportBtn);
     }
-    els.spacer = doc.createElement("div");
-    els.spacer.className = cls("__spacer");
-    els.spacer.style.height = state.visible.length * state.options.rowHeight + "px";
-    scroller.appendChild(els.spacer);
     renderWindow();
   }
   const OVERSCAN = 10;

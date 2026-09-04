@@ -108,17 +108,45 @@
 .ink-pivot__header .ink-pivot__cell--dim { z-index: 5; }
 .ink-pivot__export {
   position: absolute;
-  top: 4px;
-  right: 6px;
+  top: 6px;
+  right: 8px;
   z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: 1px solid var(--ip-hairline);
-  background: var(--ip-bg);
-  color: var(--ip-cell-text);
   border-radius: 6px;
-  padding: 2px 8px;
+  background: var(--ip-bg);
+  color: var(--ip-muted);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
   cursor: pointer;
-  font-family: inherit;
-  font-size: inherit;
+  /* It floats over the header, so leaving it visible permanently covers the
+     last column's title. Reveal it on hover, or on keyboard focus so it stays
+     reachable without a pointer. */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.ink-pivot:hover .ink-pivot__export,
+.ink-pivot:focus-within .ink-pivot__export {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ink-pivot__export:hover {
+  color: var(--ip-dim-text);
+  border-color: var(--ip-muted);
+}
+.ink-pivot__export:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  outline: 2px solid var(--ip-muted);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ink-pivot__export { transition: none; }
 }
 .ink-pivot__resizer {
   position: absolute;
